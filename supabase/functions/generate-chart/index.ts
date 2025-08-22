@@ -8,18 +8,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type AllowedFunction =
-  | "complaints_by_category"
-  | "complaints_by_ward"
-  | "complaints_monthly"
-  | "complaints_status";
+type ChartType = "bar" | "line" | "pie" | "doughnut";
 
 type Plan = {
-  function: AllowedFunction;
-  start_date?: string | null;
-  end_date?: string | null;
-  chartType?: "bar" | "line" | "pie" | "doughnut";
-  sql?: string;
+  sql: string;
+  chartType?: ChartType;
+  title: string;
+  nameColumn: string;
+  valueColumn: string;
 };
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
@@ -36,24 +32,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!);
 
-const FUNCTION_TITLES: Record<AllowedFunction, string> = {
-  complaints_by_category: "Complaints by Category",
-  complaints_by_ward: "Complaints by Ward",
-  complaints_monthly: "Monthly Complaints Trend",
-  complaints_status: "Resolution Status Breakdown",
-};
-
-const FUNCTION_DEFAULT_CHART: Record<AllowedFunction, Plan["chartType"]> = {
-  complaints_by_category: "bar",
-  complaints_by_ward: "pie",
-  complaints_monthly: "line",
-  complaints_status: "doughnut",
-};
-
-function recommendChartType(fn: AllowedFunction, requested?: Plan["chartType"]) {
-  return requested || FUNCTION_DEFAULT_CHART[fn] || "bar";
-}
-
 function safeParsePlan(text: string): Plan | null {
   // Extract first JSON object from the model's output
   const start = text.indexOf("{");
@@ -67,66 +45,95 @@ function safeParsePlan(text: string): Plan | null {
   }
 }
 
-function clampPlan(raw: any): Plan | null {
-  const allowedFns: AllowedFunction[] = [
-    "complaints_by_category",
-    "complaints_by_ward",
-    "complaints_monthly",
-    "complaints_status",
+function validateAndCleanSQL(sql: string): string | null {
+  const cleanSql = sql.trim().toLowerCase();
+  
+  // Only allow SELECT statements
+  if (!cleanSql.startsWith('select')) {
+    return null;
+  }
+  
+  // Block dangerous keywords
+  const dangerousKeywords = [
+    'drop', 'delete', 'update', 'insert', 'alter', 'create', 'truncate', 
+    'exec', 'execute', 'sp_', 'xp_', 'pg_', 'information_schema'
   ];
+  
+  for (const keyword of dangerousKeywords) {
+    if (cleanSql.includes(keyword)) {
+      return null;
+    }
+  }
+  
+  return sql.trim();
+}
 
-  const fn = raw?.function as AllowedFunction;
-  if (!allowedFns.includes(fn)) return null;
+function clampPlan(raw: any): Plan | null {
+  if (!raw?.sql || typeof raw.sql !== 'string') return null;
+  
+  const cleanedSQL = validateAndCleanSQL(raw.sql);
+  if (!cleanedSQL) return null;
 
-  const chartType = ((): Plan["chartType"] => {
+  const chartType = ((): ChartType => {
     if (raw?.chartType && ["bar", "line", "pie", "doughnut"].includes(raw.chartType)) {
       return raw.chartType;
     }
-    return undefined;
+    return "bar"; // default
   })();
 
-  // Basic ISO date sanity check
-  const isISO = (s: unknown) =>
-    typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
-
-  const start_date = isISO(raw?.start_date) ? raw.start_date : null;
-  const end_date = isISO(raw?.end_date) ? raw.end_date : null;
-
-  const sql = typeof raw?.sql === "string" ? raw.sql : undefined;
-
-  return { function: fn, chartType, start_date, end_date, sql };
+  return {
+    sql: cleanedSQL,
+    chartType,
+    title: raw?.title || "Generated Chart",
+    nameColumn: raw?.nameColumn || "name",
+    valueColumn: raw?.valueColumn || "value"
+  };
 }
 
 async function askGeminiForPlan(prompt: string): Promise<Plan | null> {
   const system = `
-You generate STRICT, SAFE JSON plans to fetch chart data from a municipal complaints database.
-Return ONLY a JSON object, no prose, matching this TypeScript type exactly:
+You are a SQL query generator for a municipal complaints database. Generate SAFE SELECT-only queries.
 
+Database Schema:
+- complaints: complaint_id, category_id, resident_id, title, description, submission_date
+- residents: resident_id, first_name, last_name, email, phone, ward
+- service_categories: category_id, category_name
+- status_logs: log_id, complaint_id, status, status_date
+
+Return ONLY a JSON object with this structure:
 {
-  "function": "complaints_by_category" | "complaints_by_ward" | "complaints_monthly" | "complaints_status",
-  "start_date": string | null,   // YYYY-MM-DD or null
-  "end_date": string | null,     // YYYY-MM-DD or null
-  "chartType": "bar" | "line" | "pie" | "doughnut" | null,
-  "sql": string                  // a human-readable SQL example for transparency only
+  "sql": "SELECT category_name as name, COUNT(*) as value FROM service_categories sc JOIN complaints c ON sc.category_id = c.category_id GROUP BY category_name ORDER BY value DESC",
+  "chartType": "bar" | "line" | "pie" | "doughnut",
+  "title": "Chart Title",
+  "nameColumn": "name",
+  "valueColumn": "value"
 }
 
 Rules:
-- Choose the function that best answers the prompt.
-- If dates are not specified, set start_date and end_date to null.
-- Prefer minimal, accurate outputs.
-- The "sql" is JUST for display; the system will NOT execute it.
+- ONLY SELECT statements allowed
+- Always alias columns as "name" and "value" for charts
+- Use proper JOINs between tables
+- Include appropriate GROUP BY and ORDER BY clauses
+- Choose appropriate chart type based on data
+- Make the title descriptive
+
+Examples:
+- "complaints by category" → GROUP BY category with COUNT
+- "complaints by ward" → JOIN residents, GROUP BY ward
+- "monthly trends" → GROUP BY month/date
+- "status breakdown" → JOIN status_logs, GROUP BY status
 `.trim();
 
   const body = {
     contents: [
       {
         role: "user",
-        parts: [{ text: `${system}\n\nUser prompt:\n${prompt}\n\nReturn ONLY the JSON object.` }],
+        parts: [{ text: `${system}\n\nUser prompt: ${prompt}\n\nReturn ONLY the JSON object.` }],
       },
     ],
     generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 512,
+      temperature: 0.1,
+      maxOutputTokens: 1024,
     },
   };
 
@@ -148,6 +155,8 @@ Rules:
   const text: string =
     data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("\n") ?? "";
 
+  console.log("Gemini response:", text);
+
   const parsed = safeParsePlan(text);
   if (!parsed) return null;
   return clampPlan(parsed);
@@ -160,7 +169,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, chartType: desiredChartType } = await req.json();
+    const { prompt, chartType: desiredChartType, previewOnly } = await req.json();
     if (!prompt || typeof prompt !== "string") {
       return new Response(JSON.stringify({ error: "Missing 'prompt' string." }), {
         status: 400,
@@ -168,46 +177,56 @@ serve(async (req) => {
       });
     }
 
-    // Ask Gemini to plan a safe RPC call
+    // Ask Gemini to generate a SQL query
     const plan = await askGeminiForPlan(prompt);
     if (!plan) {
-      return new Response(JSON.stringify({ error: "Could not derive a plan from the prompt." }), {
+      return new Response(JSON.stringify({ error: "Could not generate a valid SQL query from the prompt." }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Execute the selected RPC safely
-    console.log("Executing RPC:", plan.function, {
-      start_date: plan.start_date,
-      end_date: plan.end_date,
-    });
+    console.log("Executing SQL:", plan.sql);
 
-    const { data, error } = await supabase.rpc(plan.function, {
-      start_date: plan.start_date,
-      end_date: plan.end_date,
+    // Execute the SQL query using Supabase's RPC function
+    const { data, error } = await supabase.rpc('execute_raw_sql', {
+      sql_query: plan.sql
     });
 
     if (error) {
-      console.error("Supabase RPC error:", error);
-      return new Response(JSON.stringify({ error: error.message }), {
+      console.error("Supabase SQL error:", error);
+      return new Response(JSON.stringify({ error: `SQL execution failed: ${error.message}` }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const rows: { name: string; value: number }[] = Array.isArray(data) ? data : [];
-    const suggestedChart = recommendChartType(plan.function, plan.chartType || desiredChartType);
-    const title = FUNCTION_TITLES[plan.function] || "Chart";
-    const totalRecords = rows.reduce((sum, r) => sum + (Number(r.value) || 0), 0);
+    // Transform the data for chart consumption
+    const rawData = Array.isArray(data) ? data : [];
+    const chartData = rawData.map((row: any) => {
+      const result = row.result || row;
+      return {
+        name: result[plan.nameColumn] || result.name || 'Unknown',
+        value: Number(result[plan.valueColumn] || result.value || 0)
+      };
+    });
+
+    // Create data preview (show raw SQL results)
+    const dataPreview = rawData.slice(0, 50).map((row: any, index: number) => {
+      const result = row.result || row;
+      return { row_number: index + 1, ...result };
+    });
+
+    const finalChartType = desiredChartType || plan.chartType;
+    const totalRecords = chartData.length;
 
     const payload = {
-      chartType: suggestedChart,
-      title,
+      chartType: finalChartType,
+      title: plan.title,
       totalRecords,
-      data: rows,
-      sql: plan.sql || undefined, // for transparency, not execution
-      // dataPreview can be added in future by returning a limited table sample
+      data: chartData,
+      sql: plan.sql,
+      dataPreview: dataPreview.length > 0 ? dataPreview : undefined
     };
 
     return new Response(JSON.stringify(payload), {

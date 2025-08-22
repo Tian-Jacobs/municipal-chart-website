@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Code, Eye } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import TablePreview from './TablePreview';
 
 interface ChartData {
   chartType: string;
@@ -21,9 +21,6 @@ interface ChartDisplayProps {
 }
 
 const ChartDisplay = ({ data, isLoading, error }: ChartDisplayProps) => {
-  const [showSQL, setShowSQL] = React.useState(false);
-  const [showPreview, setShowPreview] = React.useState(false);
-
   // Enhanced color palette with better variety and accessibility - Municipal theme
   const COLORS = [
     'hsl(221, 83%, 53%)',   // Primary Blue
@@ -314,127 +311,14 @@ const ChartDisplay = ({ data, isLoading, error }: ChartDisplayProps) => {
         </div>
       </div>
 
-      {/* Enhanced Data Preview */}
-      {data.dataPreview && (
-        <div className="municipal-card">
-          <div className="municipal-card-header">
-            <button
-              onClick={() => setShowPreview(!showPreview)}
-              className="flex items-center space-x-3 text-left w-full hover:text-blue-700 transition-colors group"
-            >
-              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
-                <Eye className="w-4 h-4 text-blue-700" />
-              </div>
-              <div>
-                <span className="font-semibold text-slate-800">Data Preview</span>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  Showing up to 50 rows from {data.totalRecords} total records
-                </p>
-              </div>
-              <div className="ml-auto">
-                <div className={`transform transition-transform ${showPreview ? 'rotate-180' : ''}`}>
-                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
-          </div>
-          {showPreview && (
-            <div className="municipal-card-body p-0">
-              <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-blue-50 z-10">
-                    <TableRow className="border-b-2 border-blue-100">
-                      <TableHead className="w-12 text-center font-semibold text-blue-800 bg-blue-50">
-                        #
-                      </TableHead>
-                      {data.dataPreview.length > 0 && Object.keys(data.dataPreview[0]).map((key) => (
-                        <TableHead key={key} className="font-semibold text-blue-800 bg-blue-50 capitalize min-w-32">
-                          {key.replace(/_/g, ' ')}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.dataPreview.slice(0, 50).map((row, index) => (
-                      <TableRow 
-                        key={index} 
-                        className={`hover:bg-blue-50 transition-colors border-b border-slate-100 ${
-                          index % 2 === 0 ? 'bg-white' : 'bg-slate-25'
-                        }`}
-                      >
-                        <TableCell className="text-center text-sm font-medium text-slate-500 border-r border-slate-100 bg-slate-50">
-                          {index + 1}
-                        </TableCell>
-                        {Object.values(row).map((value: any, i) => (
-                          <TableCell key={i} className="text-slate-700 font-medium py-3">
-                            <div className="max-w-48 truncate" title={value?.toString() || 'N/A'}>
-                              {value !== null && value !== undefined ? value.toString() : 
-                                <span className="text-slate-400 italic">N/A</span>
-                              }
-                            </div>
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {data.dataPreview.length > 50 && (
-                <div className="px-6 py-4 border-t border-blue-200 bg-blue-50 text-center">
-                  <p className="text-sm text-blue-700">
-                    Showing 50 of {data.dataPreview.length} rows. 
-                    <span className="ml-1 text-blue-800 font-semibold">
-                      Export for full dataset
-                    </span>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Enhanced SQL Query Display */}
-      {data.sql && (
-        <div className="municipal-card">
-          <div className="municipal-card-header">
-            <button
-              onClick={() => setShowSQL(!showSQL)}
-              className="flex items-center space-x-3 text-left w-full hover:text-green-700 transition-colors group"
-            >
-              <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                <Code className="w-4 h-4 text-green-700" />
-              </div>
-              <div>
-                <span className="font-semibold text-slate-800">Generated SQL Query</span>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  View the database query used to generate this chart
-                </p>
-              </div>
-              <div className="ml-auto">
-                <div className={`transform transition-transform ${showSQL ? 'rotate-180' : ''}`}>
-                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
-          </div>
-          {showSQL && (
-            <div className="municipal-card-body">
-              <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto border border-green-200">
-                <pre className="text-sm text-green-400 font-mono leading-relaxed">
-                  <code>{data.sql}</code>
-                </pre>
-              </div>
-              <div className="mt-3 text-xs text-slate-600 bg-green-50 p-3 rounded-lg border border-green-200">
-                <strong className="text-green-800">Note:</strong> This SQL query was automatically generated from your natural language prompt.
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Table Preview and SQL Query Display */}
+      {data.dataPreview && data.sql && (
+        <TablePreview 
+          data={data.dataPreview}
+          title={data.title}
+          sql={data.sql}
+          totalRecords={data.totalRecords}
+        />
       )}
     </div>
   );
