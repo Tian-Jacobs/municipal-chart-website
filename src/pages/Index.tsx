@@ -5,6 +5,7 @@ import QuerySidebar from '@/components/QuerySidebar';
 import QueryInput from '@/components/QueryInput';
 import ChartDisplay from '@/components/ChartDisplay';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChartData {
   chartType: string;
@@ -137,19 +138,44 @@ const Index = () => {
     setError(null);
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Generate mock data based on query
-      const mockData = generateMockData(query);
-      setChartData(mockData);
-      
+      const { data, error: fnError } = await supabase.functions.invoke('generate-chart', {
+        body: {
+          prompt: query,
+          chartType: chartType === 'auto' ? undefined : chartType,
+        },
+      });
+
+      if (fnError) {
+        const errorMessage = fnError.message || "Failed to generate chart. Please try again or contact support.";
+        setError(errorMessage);
+        toast({
+          title: "Generation Failed",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!data) {
+        const errorMessage = "No data returned from generator.";
+        setError(errorMessage);
+        toast({
+          title: "No Data",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const payload = data as ChartData;
+      setChartData(payload);
+
       toast({
         title: "Chart Generated",
-        description: `Successfully created ${mockData.chartType} chart with ${mockData.totalRecords} records.`,
+        description: `Successfully created ${payload.chartType} chart with ${payload.totalRecords} records.`,
       });
-    } catch (err) {
-      const errorMessage = "Failed to generate chart. Please try again or contact support.";
+    } catch (err: any) {
+      const errorMessage = err?.message || "Failed to generate chart. Please try again or contact support.";
       setError(errorMessage);
       toast({
         title: "Generation Failed",
