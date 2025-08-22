@@ -49,7 +49,7 @@ const QueryInput = ({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g., Show water leak complaints by ward for the last 6 months"
-              className="municipal-input min-h-[100px] resize-y"
+              className="municipal-input min-h-[100px] resize-y text-slate-900 placeholder:text-slate-500"
               disabled={isLoading}
             />
           </div>
@@ -60,15 +60,15 @@ const QueryInput = ({
                 Chart Type
               </label>
               <Select value={chartType} onValueChange={setChartType} disabled={isLoading}>
-                <SelectTrigger className="municipal-input h-12 p-3">
+                <SelectTrigger className="municipal-input h-12 p-3 bg-slate-100 text-slate-900 border-slate-300">
                   <SelectValue placeholder="Select chart type" />
                 </SelectTrigger>
                 <SelectContent className="bg-white border border-slate-200 shadow-lg">
-                  <SelectItem value="auto">Auto (Recommended)</SelectItem>
-                  <SelectItem value="bar">Bar Chart</SelectItem>
-                  <SelectItem value="line">Line Chart</SelectItem>
-                  <SelectItem value="pie">Pie Chart</SelectItem>
-                  <SelectItem value="doughnut">Doughnut Chart</SelectItem>
+                  <SelectItem value="auto" className="text-slate-900">Auto (Recommended)</SelectItem>
+                  <SelectItem value="bar" className="text-slate-900">Bar Chart</SelectItem>
+                  <SelectItem value="line" className="text-slate-900">Line Chart</SelectItem>
+                  <SelectItem value="pie" className="text-slate-900">Pie Chart</SelectItem>
+                  <SelectItem value="doughnut" className="text-slate-900">Doughnut Chart</SelectItem>
                 </SelectContent>
               </Select>
             </div>

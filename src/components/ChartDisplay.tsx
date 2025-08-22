@@ -300,7 +300,7 @@ const ChartDisplay = ({ data, isLoading, error }: ChartDisplayProps) => {
             onClick={handleExport}
             variant="outline"
             size="sm"
-            className="border-blue-600 text-blue-600 hover:bg-blue-50 shadow-sm hover:shadow-md transition-all"
+            className="border-blue-600 text-blue-600 hover:bg-blue-50 shadow-sm hover:shadow-md transition-all bg-white"
           >
             <Download className="w-4 h-4 mr-2" />
             Export
